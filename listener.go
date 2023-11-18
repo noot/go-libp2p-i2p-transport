@@ -10,8 +10,8 @@ import (
 	"github.com/eyedeekay/sam3"
 )
 
-//this struct only exists to satisfy the interface requirements for libp2p connection
-//upgrader
+// this struct only exists to satisfy the interface requirements for libp2p connection
+// upgrader
 type TransportListener struct {
 	streamListener *sam3.StreamListener
 	multiAddr      ma.Multiaddr
@@ -31,12 +31,19 @@ func NewTransportListener(streamListener *sam3.StreamListener) (*TransportListen
 
 func (t *TransportListener) Accept() (manet.Conn, error) {
 	conn, err := t.streamListener.Accept()
-	localAddress, err := I2PAddrToMultiAddr(t.streamListener.Addr().String()) //manet.FromNetAddr(t.streamListener.a)
+	if err != nil {
+		return nil, errorx.Decorate(err, "Failed to accept connection")
+	}
+
+	localAddress, err := I2PAddrToMultiAddr(t.streamListener.Addr().String())
 	if err != nil {
 		return nil, errorx.Decorate(err, "Unable to constuct multi-addr from net address")
 	}
 
 	remoteAddress, err := I2PAddrToMultiAddr(conn.RemoteAddr().String())
+	if err != nil {
+		return nil, errorx.Decorate(err, "Unable to constuct i2p addr from multiaddr")
+	}
 
 	inboundConnection, err := NewConnection(conn, localAddress, remoteAddress)
 	if err != nil {

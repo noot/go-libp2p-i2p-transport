@@ -8,10 +8,9 @@ import (
 
 	"github.com/eyedeekay/sam3/i2pkeys"
 	"github.com/joomcode/errorx"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/transport"
-	tptu "github.com/libp2p/go-libp2p-transport-upgrader"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/transport"
 	ma "github.com/multiformats/go-multiaddr"
 	mafmt "github.com/multiformats/go-multiaddr-fmt"
 
@@ -21,29 +20,25 @@ import (
 type I2PTransport struct {
 	// Connection upgrader for upgrading insecure stream connections to
 	// secure multiplex connections.
-	Upgrader *tptu.Upgrader
+	Upgrader transport.Upgrader
 
 	sam             *sam3.SAM
 	i2PKeys         i2pkeys.I2PKeys
 	primarySession  *sam3.PrimarySession
 	outboundSession *sam3.StreamSession
 	inboundSession  *sam3.StreamSession
-	//sync.RWMutex
 }
 
 var _ transport.Transport = &I2PTransport{}
 
 type Option func(*I2PTransport) error
 
-type TransportBuilderFunc = func(*tptu.Upgrader) (*I2PTransport, error)
+type TransportBuilderFunc = func(transport.Upgrader) (*I2PTransport, error)
 
-//returns a function that when called by go-libp2p, creates an I2PTransport
-//Initializes SAM sessions/tunnel which can take about 4-25 seconds depending
-//on i2p network conditions
-func I2PTransportBuilder(sam *sam3.SAM,
-	i2pKeys i2pkeys.I2PKeys, outboundPort string, rngSeed int) (TransportBuilderFunc, ma.Multiaddr, error) {
-	rand.Seed(int64(rngSeed))
-
+// returns a function that when called by go-libp2p, creates an I2PTransport
+// Initializes SAM sessions/tunnel which can take about 4-25 seconds depending
+// on i2p network conditions
+func I2PTransportBuilder(sam *sam3.SAM, i2pKeys i2pkeys.I2PKeys, outboundPort string) (TransportBuilderFunc, ma.Multiaddr, error) {
 	randSessionSuffix := strconv.Itoa(rand.Int())
 
 	samPrimarySession, err := sam.NewPrimarySession("primarySession-"+randSessionSuffix, i2pKeys, sam3.Options_Default)
@@ -66,7 +61,7 @@ func I2PTransportBuilder(sam *sam3.SAM,
 		return nil, nil, err
 	}
 
-	return func(upgrader *tptu.Upgrader) (*I2PTransport, error) {
+	return func(upgrader transport.Upgrader) (*I2PTransport, error) {
 		i2p := &I2PTransport{
 			Upgrader:        upgrader,
 			sam:             sam,
@@ -116,12 +111,11 @@ func (i2p *I2PTransport) Dial(ctx context.Context, remoteAddress ma.Multiaddr, p
 		return nil, errorx.Decorate(err, "Failed to construct Connection type")
 	}
 
-	return i2p.Upgrader.Upgrade(ctx, i2p, outboundConnection, network.DirOutbound, peerID)
-	//return i2p.Upgrader.UpgradeOutbound(ctx, i2p, outboundConnection, peerID)
+	return i2p.Upgrader.Upgrade(ctx, i2p, outboundConnection, network.DirOutbound, peerID, &network.NullScope{})
 }
 
-//input argument isn't used because we'll be listening on whichever destination is provided
-//by i2p
+// input argument isn't used because we'll be listening on whichever destination is provided
+// by i2p
 func (i2p *I2PTransport) Listen(_ ma.Multiaddr) (transport.Listener, error) {
 	streamListener, err := i2p.inboundSession.Listen()
 	if err != nil {
@@ -136,7 +130,7 @@ func (i2p *I2PTransport) Listen(_ ma.Multiaddr) (transport.Listener, error) {
 	return i2p.Upgrader.UpgradeListener(i2p, listener), nil
 }
 
-//Closes all SAM sessions by closing the PRIMARY session
+// Closes all SAM sessions by closing the PRIMARY session
 func (i2p *I2PTransport) Close() {
 	i2p.primarySession.Close()
 }

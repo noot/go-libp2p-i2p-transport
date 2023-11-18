@@ -4,24 +4,24 @@ import (
 	"context"
 	"log"
 	"testing"
-	"time"
 
 	"github.com/eyedeekay/sam3"
 	"github.com/eyedeekay/sam3/i2pkeys"
-	csms "github.com/libp2p/go-conn-security-multistream"
-	crypto "github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/sec"
-	"github.com/libp2p/go-libp2p-core/sec/insecure"
-	mplex "github.com/libp2p/go-libp2p-mplex"
-	tptu "github.com/libp2p/go-libp2p-transport-upgrader"
+
+	crypto "github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/sec"
+	"github.com/libp2p/go-libp2p/core/sec/insecure"
+	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
+	"github.com/libp2p/go-libp2p/p2p/net/conngater"
+	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 const SAMHost = "127.0.0.1:7656"
 
-func makeInsecureMuxer(t *testing.T) (peer.ID, sec.SecureMuxer) {
+func makeInsecureMuxer(t *testing.T) (peer.ID, sec.SecureTransport) {
 	t.Helper()
 	priv, _, err := crypto.GenerateKeyPair(crypto.Ed25519, 256)
 	require.NoError(t, err)
@@ -30,9 +30,8 @@ func makeInsecureMuxer(t *testing.T) (peer.ID, sec.SecureMuxer) {
 	id, err := peer.IDFromPrivateKey(priv)
 	require.NoError(t, err)
 
-	var secMuxer csms.SSMuxer
-	secMuxer.AddTransport(insecure.ID, insecure.NewWithIdentity(id, priv))
-	return id, &secMuxer
+	st := insecure.NewWithIdentity(insecure.ID, id, priv)
+	return id, st
 }
 
 type ServerInfo struct {
@@ -62,17 +61,28 @@ func setupClient(t *testing.T, serverAddr i2pkeys.I2PAddr, serverPeerID peer.ID,
 		return
 	}
 
-	builder, _, err := I2PTransportBuilder(sam, keys, "23459", int(time.Now().UnixNano()))
+	builder, _, err := I2PTransportBuilder(sam, keys, "23459")
 	assert.NoError(t, err)
 
 	peerID, sm := makeInsecureMuxer(t)
 	log.Println("Client Peer ID is: " + peerID.String())
-	secureTransport, err := builder(&tptu.Upgrader{
-		Secure: sm,
-		Muxer:  new(mplex.Transport),
-	})
+
+	upgrader, err := tptu.New(
+		[]sec.SecureTransport{sm},
+		[]tptu.StreamMuxer{{
+			ID:    yamux.ID,
+			Muxer: new(yamux.Transport),
+		}},
+		nil,
+		nil,
+		&conngater.BasicConnectionGater{},
+	)
+	assert.NoError(t, err)
+	secureTransport, err := builder(upgrader)
+	assert.NoError(t, err)
 
 	serverMultiAddr, err := I2PAddrToMultiAddr(string(serverAddr))
+	assert.NoError(t, err)
 	log.Println("Dialing host on this destination: " + serverMultiAddr.String())
 
 	for i := 0; i < 5; i++ {
@@ -89,7 +99,8 @@ func setupClient(t *testing.T, serverAddr i2pkeys.I2PAddr, serverPeerID peer.ID,
 			return
 		}
 
-		stream.Write([]byte("Hello!"))
+		_, err = stream.Write([]byte("Hello!"))
+		assert.NoError(t, err)
 		stream.Close()
 	}
 }
@@ -109,16 +120,25 @@ func setupServer(t *testing.T, addrChan chan *ServerInfo) {
 	}
 
 	port := "45793"
-	builder, listenAddr, err := I2PTransportBuilder(sam, keys, port, int(time.Now().UnixNano()))
+	builder, listenAddr, err := I2PTransportBuilder(sam, keys, port)
 	assert.NoError(t, err)
 
 	peerID, sm := makeInsecureMuxer(t)
 	log.Println("Server Peer ID is: " + peerID.String())
 
-	secureTransport, err := builder(&tptu.Upgrader{
-		Secure: sm,
-		Muxer:  new(mplex.Transport),
-	})
+	upgrader, err := tptu.New(
+		[]sec.SecureTransport{sm},
+		[]tptu.StreamMuxer{{
+			ID:    yamux.ID,
+			Muxer: new(yamux.Transport),
+		}},
+		nil,
+		nil,
+		&conngater.BasicConnectionGater{},
+	)
+	assert.NoError(t, err)
+	secureTransport, err := builder(upgrader)
+	assert.NoError(t, err)
 
 	listener, err := secureTransport.Listen(listenAddr)
 	if err != nil {
@@ -141,13 +161,15 @@ func setupServer(t *testing.T, addrChan chan *ServerInfo) {
 		}
 
 		stream, err := capableConnection.AcceptStream()
+		assert.NoError(t, err)
 
 		buf := make([]byte, 1024)
 		_, err = stream.Read(buf)
-		stream.Write([]byte(capableConnection.LocalMultiaddr().String()))
+		assert.NoError(t, err)
+		_, err = stream.Write([]byte(capableConnection.LocalMultiaddr().String()))
+		assert.NoError(t, err)
 		log.Println(capableConnection.RemoteMultiaddr())
 
 		stream.Close()
 	}
-
 }

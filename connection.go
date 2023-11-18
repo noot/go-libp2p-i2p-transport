@@ -30,7 +30,7 @@ type ConnWithoutAddr interface {
 	SetWriteDeadline(t time.Time) error
 }
 
-//This struct only exists to satify libp2p interfaces
+// This struct only exists to satify libp2p interfaces
 type Connection struct {
 	ConnWithoutAddr
 
@@ -61,7 +61,7 @@ func NewConnection(conn ConnWithoutAddr, localAddr, remoteAddr ma.Multiaddr) (*C
 	}, nil
 }
 
-//I don't think these are used anywhere.. but must match the interface
+// I don't think these are used anywhere.. but must match the interface
 func (c *Connection) LocalAddr() net.Addr {
 	return c.localNetAddr
 }
