@@ -7,13 +7,8 @@ require (
 	github.com/eyedeekay/sam3 v0.32.33-0.20210718190649-31b8d62f0461
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
 	github.com/joomcode/errorx v1.0.3
-	// github.com/libp2p/go-conn-security-multistream v0.3.0
-	// github.com/libp2p/go-libp2p-core v0.10.0
-	// github.com/libp2p/go-libp2p-mplex v0.4.1
-	// github.com/libp2p/go-libp2p-transport-upgrader v0.5.0
 	github.com/libp2p/go-libp2p v0.32.1
 	github.com/multiformats/go-multiaddr v0.12.0
-	//github.com/multiformats/go-multiaddr-fmt v0.1.0
 	github.com/stretchr/testify v1.8.4
 )
 

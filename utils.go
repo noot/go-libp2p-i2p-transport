@@ -10,7 +10,7 @@ import (
 func MultiAddrToI2PAddr(addr ma.Multiaddr) (string, error) {
 	numProtocols := len(addr.Protocols())
 	if numProtocols != 1 {
-		return "", fmt.Errorf("Expected 1 protocols in multiaddr but found %d", numProtocols)
+		return "", fmt.Errorf("expected 1 protocols in multiaddr but found %d", numProtocols)
 	}
 
 	destination, err := addr.ValueForProtocol(addr.Protocols()[0].Code)
@@ -29,7 +29,7 @@ func MultiAddrToI2PAddr(addr ma.Multiaddr) (string, error) {
 // expects there to be no :port suffix to the address
 func I2PAddrToMultiAddr(addr string) (ma.Multiaddr, error) {
 	if len(addr) < 52 {
-		return nil, errors.New("Address too short for a i2p")
+		return nil, errors.New("address too short for a i2p")
 	}
 
 	garlicBase := "/garlic64/"
